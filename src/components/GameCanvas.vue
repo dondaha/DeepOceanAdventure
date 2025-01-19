@@ -72,9 +72,12 @@ export default {
             faceDetector: undefined, // 人脸识别器
             faceResults: undefined, // 人脸识别结果
             faceBox: undefined, // 人脸框, 包含height, originX, originY, width
+            submarine_x: 0, // 潜艇的x坐标
+            submarine_y: 0, // 潜艇的y坐标
             // 一些图片资源
             backgroundImage: null, // 背景图片
             submarineImage: null, // 潜艇图片
+            barrierImage: null, // 障碍物图片
         }
     },
     mounted() {
@@ -114,15 +117,23 @@ export default {
             });
         },
         loadImage() {
+            // 加载背景图片
             const img = new Image();
             img.src = "/DeepOceanAdventure/assets/base.png";
             img.onload = () => {
                 this.backgroundImage = img;
             };
+            // 加载潜艇图片
             const submarineImg = new Image();
             submarineImg.src = "/DeepOceanAdventure/assets/submarine.png";
             submarineImg.onload = () => {
                 this.submarineImage = submarineImg;
+            };
+            // 加载障碍物图片
+            const barrierImg = new Image();
+            barrierImg.src = "/DeepOceanAdventure/assets/227975925.png";
+            barrierImg.onload = () => {
+                this.barrierImage = barrierImg;
             };
         },
         async predictWebcam() {
@@ -161,20 +172,22 @@ export default {
                 canvasCtx.drawImage(this.backgroundImage, 0, canvas.height*2/3, canvas.width, canvas.height/3);
             }
 
-            // 绘制人脸关键点和贴脸的潜艇
-            if (this.faceResults && this.faceResults.detections) {
+            // 绘制人脸关键点和计算潜艇应该在什么位置
+            if (this.faceResults && this.faceResults.detections && this.faceResults.detections.length > 0) {
                 this.drawFaceDetections(canvasCtx, this.faceResults.detections);
                 // 直接把潜艇画到人脸的中心位置
                 // 选取bounding box的中心作为潜艇的位置
                 console.log(this.faceResults.detections[0].boundingBox);
-                const faceBox = this.faceResults    .detections[0].boundingBox;
-                const centerX = canvas.width - (faceBox.originX + faceBox.width / 2);
-                const centerY = (faceBox.originY + faceBox.height / 2);
-                const submarineWidth = faceBox.width * 0.5;
-                const submarineHeight = faceBox.height * 0.5;
-                canvasCtx.drawImage(this.submarineImage, centerX - submarineWidth / 2, centerY - submarineHeight / 2, submarineWidth, submarineHeight);
-
+                this.faceBox = this.faceResults.detections[0].boundingBox;
             }
+
+            const centerX = canvas.width - (this.faceBox.originX + this.faceBox.width / 2);
+            const centerY = (this.faceBox.originY + this.faceBox.height / 2);
+            this.submarine_x = centerX;
+            this.submarine_y = centerY;
+            const submarineWidth = this.faceBox.width * 0.5;
+            const submarineHeight = this.faceBox.height * 0.5;
+            canvasCtx.drawImage(this.submarineImage, centerX - submarineWidth / 2, centerY - submarineHeight / 2, submarineWidth, submarineHeight);
 
             canvasCtx.restore(); // 恢复上下文状态
 
