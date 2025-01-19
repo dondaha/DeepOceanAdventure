@@ -1,6 +1,6 @@
 <template>
     <div class="left">
-        Score: 0
+        Score: {{ score }}
     </div>
 </template>
 
@@ -30,6 +30,11 @@
 
 <script>
 export default {
-    name: 'Left'
+    props: {
+        score: {
+            type: Number,
+            required: true
+        }
+    }
 }
 </script>

@@ -225,10 +225,17 @@ export default {
                 // 移除超出画布的障碍物
                 if (barrier.y + barrier.height < -100) {
                     this.barriers.splice(index, 1);
+                    this.score += 1;
                 }
             });
 
             canvasCtx.restore(); // 恢复上下文状态
+
+            // 在左上角绘制得分
+            canvasCtx.fillStyle = "black";
+            canvasCtx.font = "20px Arial";
+            canvasCtx.fillText(`Score: ${this.score}`, 20, 30);
+
 
             // Call this function again to keep predicting when the browser is ready.
             if (this.webcamRunning && !this.gameOver) {
@@ -238,8 +245,6 @@ export default {
             }
         },
         checkCollision(barrier, submarineX, submarineY, submarineWidth, submarineHeight) {
-            const safeZoneStart = 951;
-            const safeZoneEnd = 1187;
             const rect1 = {
                 x: barrier.x,
                 y: barrier.y,

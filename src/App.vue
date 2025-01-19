@@ -1,8 +1,8 @@
 <template>
   <div id="app">
-    <Left />
+    <!-- <Left /> -->
     <GameCanvas />
-    <Right />
+    <!-- <Right /> -->
   </div>
 </template>
 
