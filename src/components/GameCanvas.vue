@@ -65,6 +65,9 @@ export default {
     },
     data() {
         return {
+            moving_speed: 150, // 障碍物移动速度
+            generate_interval: 2500, // 障碍物生成间隔
+            lastFrameTime: performance.now(), // 上一帧的时间
             drawUtilsLoaded: false, // drawing_utils 是否已加载
             runningMode: "VIDEO", // 运行模式
             webcamRunning: true, // 摄像头是否正在运行
@@ -90,6 +93,7 @@ export default {
         this.enableCam();
         this.loadImage();
         this.startGeneratingBarriers();
+        this.lastFrameTime = performance.now(); // 初始化 lastFrameTime
     },
     methods: {
         async loadDrawingUtils() {
@@ -146,7 +150,7 @@ export default {
                 if (!this.gameOver) {
                     this.generateBarrier();
                 }
-            }, 2000);
+            }, this.generate_interval);
         },
         generateBarrier() {
             // 随机生成障碍物
@@ -214,9 +218,14 @@ export default {
             const submarineHeight = this.faceBox.height * 0.5;
             canvasCtx.drawImage(this.submarineImage, centerX - submarineWidth / 2, centerY - submarineHeight / 2, submarineWidth, submarineHeight);
 
+            // 计算时间间隔
+            const currentTime = performance.now();
+            const deltaTime = (currentTime - this.lastFrameTime) / 1000; // 计算时间间隔（秒）
+            this.lastFrameTime = currentTime;
+
             // 绘制并移动障碍物
             this.barriers.forEach((barrier, index) => {
-                barrier.y -= 2; // 障碍物向上移动
+                barrier.y -= this.moving_speed * deltaTime; // 障碍物以固定速度移动（100 像素/秒）
                 canvasCtx.drawImage(this.barrierImage, barrier.x, barrier.y, barrier.width, barrier.height);
                 // 检查碰撞
                 if (this.checkCollision(barrier, centerX, centerY, submarineWidth, submarineHeight)) {
