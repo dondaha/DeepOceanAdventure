@@ -1,11 +1,15 @@
 <template>
   <div id="app">
+    <Left />
     <GameCanvas />
+    <Right />
   </div>
 </template>
 
 <script setup>
 import GameCanvas from './components/GameCanvas.vue';
+import Left from './components/Left.vue';
+import Right from './components/Right.vue';
 </script>
 
 <style>

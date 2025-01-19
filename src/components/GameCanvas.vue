@@ -61,7 +61,7 @@ import {
 
 export default {
     props: {
-
+        score: Number,
     },
     data() {
         return {
@@ -74,10 +74,14 @@ export default {
             faceBox: undefined, // 人脸框, 包含height, originX, originY, width
             submarine_x: 0, // 潜艇的x坐标
             submarine_y: 0, // 潜艇的y坐标
+            canvas_size: { width: 100, height: 100 }, // 画布大小
             // 一些图片资源
             backgroundImage: null, // 背景图片
             submarineImage: null, // 潜艇图片
             barrierImage: null, // 障碍物图片
+            barriers: [], // 障碍物数组
+            gameOver: false, // 游戏结束标志
+            score: 0 // 得分
         }
     },
     mounted() {
@@ -85,6 +89,7 @@ export default {
         this.createFaceDetector();
         this.enableCam();
         this.loadImage();
+        this.startGeneratingBarriers();
     },
     methods: {
         async loadDrawingUtils() {
@@ -136,6 +141,27 @@ export default {
                 this.barrierImage = barrierImg;
             };
         },
+        startGeneratingBarriers() {
+            setInterval(() => {
+                if (!this.gameOver) {
+                    this.generateBarrier();
+                }
+            }, 2000);
+        },
+        generateBarrier() {
+            // 随机生成障碍物
+            if (!this.barrierImage) {
+                return; // 图片未加载完成，不生成障碍物
+            }
+            const canvas = this.$refs.canvas;
+            const barrier = {
+                x: canvas.width * (Math.random()*0.5+0.25) - this.barrierImage.width / 2,
+                y: canvas.height,
+                width: this.barrierImage.width,
+                height: this.barrierImage.height
+            };
+            this.barriers.push(barrier);
+        },
         async predictWebcam() {
             if (!this.drawUtilsLoaded || !this.faceDetector) {
                 requestAnimationFrame(this.predictWebcam);
@@ -177,7 +203,6 @@ export default {
                 this.drawFaceDetections(canvasCtx, this.faceResults.detections);
                 // 直接把潜艇画到人脸的中心位置
                 // 选取bounding box的中心作为潜艇的位置
-                console.log(this.faceResults.detections[0].boundingBox);
                 this.faceBox = this.faceResults.detections[0].boundingBox;
             }
 
@@ -189,12 +214,65 @@ export default {
             const submarineHeight = this.faceBox.height * 0.5;
             canvasCtx.drawImage(this.submarineImage, centerX - submarineWidth / 2, centerY - submarineHeight / 2, submarineWidth, submarineHeight);
 
+            // 绘制并移动障碍物
+            this.barriers.forEach((barrier, index) => {
+                barrier.y -= 2; // 障碍物向上移动
+                canvasCtx.drawImage(this.barrierImage, barrier.x, barrier.y, barrier.width, barrier.height);
+                // 检查碰撞
+                if (this.checkCollision(barrier, centerX, centerY, submarineWidth, submarineHeight)) {
+                    this.gameOver = true;
+                }
+                // 移除超出画布的障碍物
+                if (barrier.y + barrier.height < -100) {
+                    this.barriers.splice(index, 1);
+                }
+            });
+
             canvasCtx.restore(); // 恢复上下文状态
 
             // Call this function again to keep predicting when the browser is ready.
-            if (this.webcamRunning) {
+            if (this.webcamRunning && !this.gameOver) {
                 window.requestAnimationFrame(this.predictWebcam);
+            } else if (this.gameOver) {
+                alert("Game Over!");
             }
+        },
+        checkCollision(barrier, submarineX, submarineY, submarineWidth, submarineHeight) {
+            const safeZoneStart = 951;
+            const safeZoneEnd = 1187;
+            const rect1 = {
+                x: barrier.x,
+                y: barrier.y,
+                width: barrier.width*951/2162, // 障碍物图片可能缩放，使用比例计算
+                height: barrier.height
+            };
+            const rect2 = {
+                x: barrier.x + barrier.width*1187/2162,
+                y: barrier.y,
+                width: barrier.width*(2162-1187)/2162,
+                height: barrier.height
+            };
+            const submarine_rect = {
+                x: submarineX - submarineWidth / 2,
+                y: submarineY - submarineHeight / 2,
+                width: submarineWidth,
+                height: submarineHeight
+            };
+            // 检查潜艇是否不与障碍物1碰撞
+            const not_collide_with_rect1 = (
+                submarine_rect.x > rect1.x + rect1.width || // 潜艇的左边界在障碍物的右边界右侧
+                submarine_rect.x + submarine_rect.width < rect1.x || // 潜艇的右边界在障碍物的左边界左侧
+                submarine_rect.y > rect1.y + rect1.height || // 潜艇的上边界在障碍物的下边界下侧
+                submarine_rect.y + submarine_rect.height < rect1.y // 潜艇的下边界在障碍物的上边界上侧
+            );
+            // 检查潜艇是否不与障碍物2碰撞
+            const not_collide_with_rect2 = (
+                submarine_rect.x > rect2.x + rect2.width || // 潜艇的左边界在障碍物的右边界右侧
+                submarine_rect.x + submarine_rect.width < rect2.x || // 潜艇的右边界在障碍物的左边界左侧
+                submarine_rect.y > rect2.y + rect2.height || // 潜艇的上边界在障碍物的下边界下侧
+                submarine_rect.y + submarine_rect.height < rect2.y // 潜艇的下边界在障碍物的上边界上侧
+            );
+            return !not_collide_with_rect1 || !not_collide_with_rect2;
         },
         drawFaceDetections(ctx, detections) {
             for (const detection of detections) {
