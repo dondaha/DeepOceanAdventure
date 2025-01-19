@@ -6,6 +6,10 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    host: 'localhost',
+    port: 3000 // 你可以选择一个不同的端口
+  },
   plugins: [
     vue(),
     vueDevTools(),
