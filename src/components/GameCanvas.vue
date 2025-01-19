@@ -94,6 +94,7 @@ export default {
         this.loadImage();
         this.startGeneratingBarriers();
         this.lastFrameTime = performance.now(); // 初始化 lastFrameTime
+        window.addEventListener('keydown', this.handleRestart); // 添加键盘事件监听器
     },
     methods: {
         async loadDrawingUtils() {
@@ -238,6 +239,22 @@ export default {
                 }
             });
 
+            // 游戏结束时绘制弹窗
+            if (this.gameOver) {
+                canvasCtx.fillStyle = "rgba(0, 0, 0, 0.6)";
+                canvasCtx.fillRect(canvas.width / 4, canvas.height / 4, canvas.width / 2, canvas.height / 2);
+
+                canvasCtx.fillStyle = "red";
+                canvasCtx.font = "30px Arial";
+                canvasCtx.textAlign = "center";
+                canvasCtx.fillText("游戏结束", canvas.width / 2, canvas.height / 2 - 20);
+
+                canvasCtx.fillStyle = "white";
+                canvasCtx.font = "20px Arial";
+                canvasCtx.fillText(`分数：${this.score}`, canvas.width / 2, canvas.height / 2 + 20);
+                canvasCtx.fillText("按R重新开始游戏", canvas.width / 2, canvas.height / 2 + 60);
+            }
+
             canvasCtx.restore(); // 恢复上下文状态
 
             // 在左上角绘制得分
@@ -249,9 +266,21 @@ export default {
             // Call this function again to keep predicting when the browser is ready.
             if (this.webcamRunning && !this.gameOver) {
                 window.requestAnimationFrame(this.predictWebcam);
-            } else if (this.gameOver) {
-                alert("Game Over!");
             }
+        },
+        handleRestart(event) {
+            if (event.key === 'r' || event.key === 'R') {
+                if (this.gameOver) {
+                    this.resetGame();
+                }
+            }
+        },
+        resetGame() {
+            this.gameOver = false;
+            this.score = 0;
+            this.barriers = [];
+            this.lastFrameTime = performance.now();
+            this.predictWebcam();
         },
         checkCollision(barrier, submarineX, submarineY, submarineWidth, submarineHeight) {
             const rect1 = {
@@ -306,6 +335,9 @@ export default {
                 });
             }
         },
+    },
+    beforeDestroy() {
+        window.removeEventListener('keydown', this.handleRestart); // 移除键盘事件监听器
     }
 }
 </script>
