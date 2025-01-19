@@ -12,10 +12,10 @@
 <style scoped>
 .top {
     position: absolute;
-    top: 25%;
+    top: 20%;
     left: 25%;
     width: 45%;
-    height: 68%;
+    height: 75%;
     background-color: #c0e3ff;
     border-radius: 5%;
     overflow: hidden;
@@ -71,12 +71,14 @@ export default {
             results: undefined, // 识别结果
             faceDetector: undefined, // 人脸识别器
             faceResults: undefined, // 人脸识别结果
+            backgroundImage: null, // 背景图片
         }
     },
     mounted() {
         this.loadDrawingUtils();
         this.createFaceDetector();
         this.enableCam();
+        this.loadBackgroundImage();
     },
     methods: {
         async loadDrawingUtils() {
@@ -108,6 +110,13 @@ export default {
                 this.$refs.video.addEventListener("loadeddata", this.predictWebcam);
             });
         },
+        loadBackgroundImage() {
+            const img = new Image();
+            img.src = "/DeepOceanAdventure/assets/base.png";
+            img.onload = () => {
+                this.backgroundImage = img;
+            };
+        },
         async predictWebcam() {
             if (!this.drawUtilsLoaded || !this.faceDetector) {
                 requestAnimationFrame(this.predictWebcam);
@@ -138,6 +147,11 @@ export default {
 
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvas.width, canvas.height); // 清空画布
+
+            // 绘制背景图片
+            if (this.backgroundImage) {
+                canvasCtx.drawImage(this.backgroundImage, 0, canvas.height*2/3, canvas.width, canvas.height/3);
+            }
 
             // 绘制人脸关键点
             if (this.faceResults && this.faceResults.detections) {
