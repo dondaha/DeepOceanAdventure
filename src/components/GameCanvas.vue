@@ -265,6 +265,7 @@ export default {
             this.lastFrameTime = currentTime;
 
             // 绘制并移动障碍物
+            const toRemove = []; // 临时数组，用于存储需要删除的障碍物的索引
             this.barriers.forEach((barrier, index) => {
                 barrier.y -= this.moving_speed * deltaTime;
                 canvasCtx.drawImage(this.barrierImage, barrier.x, barrier.y, barrier.width, barrier.height);
@@ -272,11 +273,16 @@ export default {
                 if (this.checkCollision(barrier, centerX, centerY, submarineWidth, submarineHeight)) {
                     this.gameOver = true;
                 }
-                // 移除超出画布的障碍物
+                // 标记超出画布的障碍物
                 if (barrier.y + barrier.height < -100) {
-                    this.barriers.splice(index, 1);
+                    toRemove.push(index);
                     this.score += 1;
                 }
+            });
+
+            // 统一删除标记的障碍物
+            toRemove.reverse().forEach(index => {
+                this.barriers.splice(index, 1);
             });
 
             // 游戏结束时绘制弹窗
