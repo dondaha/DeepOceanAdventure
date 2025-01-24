@@ -54,6 +54,7 @@
 
 <script>
 import {
+    PoseLandmarker,
     FilesetResolver,
     DrawingUtils,
     FaceDetector
@@ -84,17 +85,31 @@ export default {
             barrierImage: null, // 障碍物图片
             barriers: [], // 障碍物数组
             gameOver: false, // 游戏结束标志
-            score: 0 // 得分
+            score: 0, // 得分
+            // 姿态识别结果
+            poseResults: undefined,
+            isRightHandRaised: false,
+            // 游戏已经开始了多久
+            gameStartTime: 0,
+            // 上次生成障碍物的时间
+            lastGenerateTime: 0
         }
     },
     mounted() {
         this.loadDrawingUtils();
         this.createFaceDetector();
+        this.createPoseLandmarker();
         this.enableCam();
         this.loadImage();
         this.startGeneratingBarriers();
         this.lastFrameTime = performance.now(); // 初始化 lastFrameTime
         window.addEventListener('keydown', this.handleRestart); // 添加键盘事件监听器
+        // 添加变量监听器，当isRightHandRaised: ture调用this.handleRestart
+        this.$watch(() => this.isRightHandRaised, (newVal) => {
+            if (newVal) {
+                this.handleRestart({ key: 'r' });
+            }
+        });
     },
     methods: {
         async loadDrawingUtils() {
@@ -104,6 +119,19 @@ export default {
                 this.drawUtilsLoaded = true;
             };
             document.head.appendChild(script);
+        },
+        async createPoseLandmarker() {
+            const vision = await FilesetResolver.forVisionTasks(
+                "/DeepOceanAdventure/wasm"
+            );
+            this.poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: `/DeepOceanAdventure/pose_landmarker_lite.task`,
+                    delegate: "GPU"
+                },
+                runningMode: this.runningMode,
+                numPoses: 1
+            });
         },
         async createFaceDetector() {
             const vision = await FilesetResolver.forVisionTasks(
@@ -151,13 +179,19 @@ export default {
                 if (!this.gameOver) {
                     this.generateBarrier();
                 }
-            }, this.generate_interval);
+            }, 100);
         },
         generateBarrier() {
             // 随机生成障碍物
             if (!this.barrierImage) {
                 return; // 图片未加载完成，不生成障碍物
             }
+            const currentTime = performance.now();
+            // 距离上次生成障碍物的时间大于生成间隔时才生成障碍物
+            if (currentTime - this.lastGenerateTime < this.generate_interval) {
+                return;
+            }
+            this.lastGenerateTime = currentTime;
             const canvas = this.$refs.canvas;
             const barrier = {
                 x: canvas.width * (Math.random()*0.5+0.25) - this.barrierImage.width / 2,
@@ -188,11 +222,17 @@ export default {
             const startTimeMs = performance.now();
             if (this.lastVideoTime !== video.currentTime) {
                 this.lastVideoTime = video.currentTime;
-                // 获取翻转后的图像数据
-                canvasCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const imageData = canvasCtx.getImageData(0, 0, canvas.width, canvas.height);
-                // 将翻转后的图像数据传递给faceDetector进行检测
-                this.faceResults = await this.faceDetector.detectForVideo(imageData, startTimeMs);
+                
+                // 如果游戏结束了就不检测人脸了
+                if (!this.gameOver) {
+                    // 将翻转后的图像数据传递给faceDetector进行检测
+                    this.faceResults = await this.faceDetector.detectForVideo(video, startTimeMs);
+                }
+                else{
+                    this.poseResults = await this.poseLandmarker.detectForVideo(video, startTimeMs);
+                    // 检查右手是否举起
+                    this.checkRightHandRaised(this.poseResults);
+                }
             }
 
             canvasCtx.save();
@@ -205,7 +245,7 @@ export default {
 
             // 绘制人脸关键点和计算潜艇应该在什么位置
             if (this.faceResults && this.faceResults.detections && this.faceResults.detections.length > 0) {
-                this.drawFaceDetections(canvasCtx, this.faceResults.detections);
+                // this.drawFaceDetections(canvasCtx, this.faceResults.detections);
                 // 直接把潜艇画到人脸的中心位置
                 // 选取bounding box的中心作为潜艇的位置
                 this.faceBox = this.faceResults.detections[0].boundingBox;
@@ -226,7 +266,7 @@ export default {
 
             // 绘制并移动障碍物
             this.barriers.forEach((barrier, index) => {
-                barrier.y -= this.moving_speed * deltaTime; // 障碍物以固定速度移动（100 像素/秒）
+                barrier.y -= this.moving_speed * deltaTime;
                 canvasCtx.drawImage(this.barrierImage, barrier.x, barrier.y, barrier.width, barrier.height);
                 // 检查碰撞
                 if (this.checkCollision(barrier, centerX, centerY, submarineWidth, submarineHeight)) {
@@ -241,6 +281,9 @@ export default {
 
             // 游戏结束时绘制弹窗
             if (this.gameOver) {
+                this.moving_speed = 0; // 游戏结束时停止移动
+                this.generate_interval = 999999; // 游戏结束时停止生成障碍物
+
                 canvasCtx.fillStyle = "rgba(0, 0, 0, 0.6)";
                 canvasCtx.fillRect(canvas.width / 4, canvas.height / 4, canvas.width / 2, canvas.height / 2);
 
@@ -252,7 +295,12 @@ export default {
                 canvasCtx.fillStyle = "white";
                 canvasCtx.font = "20px Arial";
                 canvasCtx.fillText(`分数：${this.score}`, canvas.width / 2, canvas.height / 2 + 20);
-                canvasCtx.fillText("按R重新开始游戏", canvas.width / 2, canvas.height / 2 + 60);
+                canvasCtx.fillText("举右手重新开始游戏", canvas.width / 2, canvas.height / 2 + 60);
+            }
+            else{
+                this.moving_speed = 150 + this.score * 4; // 随着得分增加，障碍物移动速度增加
+                const generate_interval = 2500*150/this.moving_speed; // 随着得分增加，障碍物生成间隔减少
+                this.generate_interval = generate_interval < 500 ? 500 : generate_interval; // 生成间隔最小为500ms
             }
 
             canvasCtx.restore(); // 恢复上下文状态
@@ -264,13 +312,23 @@ export default {
 
 
             // Call this function again to keep predicting when the browser is ready.
-            if (this.webcamRunning && !this.gameOver) {
+            if (this.webcamRunning) {
                 window.requestAnimationFrame(this.predictWebcam);
+            }
+        },
+        checkRightHandRaised(results) {
+            if (results && results.landmarks[0]) {
+                const rightWrist = results.landmarks[0][16];
+                const rightElbow = results.landmarks[0][0];
+                if (rightWrist && rightElbow && rightWrist.y < rightElbow.y) {
+                    this.isRightHandRaised = true;
+                }
             }
         },
         handleRestart(event) {
             if (event.key === 'r' || event.key === 'R') {
                 if (this.gameOver) {
+                    this.isRightHandRaised = false;
                     this.resetGame();
                 }
             }
