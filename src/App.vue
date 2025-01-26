@@ -26,7 +26,7 @@ body {
   width: 100vw;
   height: 100vh;
   background-image: url("./asset/bgc_landscape.jpg");
-  background-size: 100%;
+  background-size: contain;
   background-position: center center;
   background-repeat: no-repeat;
   background-attachment: fixed;

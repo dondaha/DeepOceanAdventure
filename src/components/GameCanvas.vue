@@ -12,8 +12,9 @@
 <style scoped>
 .top {
     position: absolute;
-    top: 20%;
-    left: 25%;
+    top: 55%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     width: 45%;
     height: 75%;
     background-color: #c0e3ff;
