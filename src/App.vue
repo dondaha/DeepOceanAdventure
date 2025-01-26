@@ -27,7 +27,7 @@ body {
   height: 100vh;
   background-image: url("./asset/bgc_landscape.jpg");
   background-size: contain;
-  background-position: center center;
+  background-position: top center;
   background-repeat: no-repeat;
   background-attachment: fixed;
   /* 默认背景颜色 */
