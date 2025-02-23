@@ -76,7 +76,7 @@ export default {
             results: undefined, // 识别结果
             faceDetector: undefined, // 人脸识别器
             faceResults: undefined, // 人脸识别结果
-            faceBox: undefined, // 人脸框, 包含height, originX, originY, width
+            faceBox: {originX: 245, originY: 135, width: 210, height: 210}, // 人脸框, 包含height, originX, originY, width
             submarine_x: 0, // 潜艇的x坐标
             submarine_y: 0, // 潜艇的y坐标
             canvas_size: { width: 100, height: 100 }, // 画布大小
@@ -93,7 +93,8 @@ export default {
             // 游戏已经开始了多久
             gameStartTime: 0,
             // 上次生成障碍物的时间
-            lastGenerateTime: 0
+            lastGenerateTime: 0,
+            gameStarted: false // 游戏是否已经开始
         }
     },
     mounted() {
@@ -102,7 +103,6 @@ export default {
         this.createPoseLandmarker();
         this.enableCam();
         this.loadImage();
-        this.startGeneratingBarriers();
         this.lastFrameTime = performance.now(); // 初始化 lastFrameTime
         window.addEventListener('keydown', this.handleRestart); // 添加键盘事件监听器
         // 添加变量监听器，当isRightHandRaised: ture调用this.handleRestart
@@ -177,7 +177,7 @@ export default {
         },
         startGeneratingBarriers() {
             setInterval(() => {
-                if (!this.gameOver) {
+                if (!this.gameOver && this.gameStarted) {
                     this.generateBarrier();
                 }
             }, 100);
@@ -225,7 +225,7 @@ export default {
                 this.lastVideoTime = video.currentTime;
                 
                 // 如果游戏结束了就不检测人脸了
-                if (!this.gameOver) {
+                if (!this.gameOver && this.gameStarted) {
                     // 将翻转后的图像数据传递给faceDetector进行检测
                     this.faceResults = await this.faceDetector.detectForVideo(video, startTimeMs);
                 }
@@ -252,13 +252,15 @@ export default {
                 this.faceBox = this.faceResults.detections[0].boundingBox;
             }
 
-            const centerX = canvas.width - (this.faceBox.originX + this.faceBox.width / 2);
-            const centerY = (this.faceBox.originY + this.faceBox.height / 2);
-            this.submarine_x = centerX;
-            this.submarine_y = centerY;
-            const submarineWidth = this.faceBox.width * 0.5;
-            const submarineHeight = this.faceBox.height * 0.5;
-            canvasCtx.drawImage(this.submarineImage, centerX - submarineWidth / 2, centerY - submarineHeight / 2, submarineWidth, submarineHeight);
+            if (this.faceBox) {
+                const centerX = canvas.width - (this.faceBox.originX + this.faceBox.width / 2);
+                const centerY = (this.faceBox.originY + this.faceBox.height / 2);
+                this.submarine_x = centerX;
+                this.submarine_y = centerY;
+                const submarineWidth = this.faceBox.width * 0.5;
+                const submarineHeight = this.faceBox.height * 0.5;
+                canvasCtx.drawImage(this.submarineImage, centerX - submarineWidth / 2, centerY - submarineHeight / 2, submarineWidth, submarineHeight);
+            }
 
             // 计算时间间隔
             const currentTime = performance.now();
@@ -271,7 +273,7 @@ export default {
                 barrier.y -= this.moving_speed * deltaTime;
                 canvasCtx.drawImage(this.barrierImage, barrier.x, barrier.y, barrier.width, barrier.height);
                 // 检查碰撞
-                if (this.checkCollision(barrier, centerX, centerY, submarineWidth, submarineHeight)) {
+                if (this.checkCollision(barrier, this.submarine_x, this.submarine_y, this.faceBox.width * 0.5, this.faceBox.height * 0.5)) {
                     this.gameOver = true;
                 }
                 // 标记超出画布的障碍物
@@ -303,10 +305,17 @@ export default {
                 canvasCtx.font = "20px Arial";
                 canvasCtx.fillText(`分数：${this.score}`, canvas.width / 2, canvas.height / 2 + 20);
                 canvasCtx.fillText("举右手重新开始游戏", canvas.width / 2, canvas.height / 2 + 60);
-            }
-            else{
+            } else if (!this.gameStarted) {
+                canvasCtx.fillStyle = "rgba(0, 0, 0, 0.6)";
+                canvasCtx.fillRect(canvas.width / 4, canvas.height / 4, canvas.width / 2, canvas.height / 2);
+
+                canvasCtx.fillStyle = "white";
+                canvasCtx.font = "20px Arial";
+                canvasCtx.textAlign = "center";
+                canvasCtx.fillText("举右手开始游戏", canvas.width / 2, canvas.height / 2);
+            } else {
                 this.moving_speed = 150 + this.score * 4; // 随着得分增加，障碍物移动速度增加
-                const generate_interval = 2500*150/this.moving_speed; // 随着得分增加，障碍物生成间隔减少
+                const generate_interval = 2500 * 150 / this.moving_speed; // 随着得分增加，障碍物生成间隔减少
                 this.generate_interval = generate_interval < 500 ? 500 : generate_interval; // 生成间隔最小为500ms
             }
 
@@ -334,7 +343,7 @@ export default {
         },
         handleRestart(event) {
             if (event.key === 'r' || event.key === 'R') {
-                if (this.gameOver) {
+                if (this.gameOver || !this.gameStarted) {
                     this.isRightHandRaised = false;
                     this.resetGame();
                 }
@@ -342,22 +351,24 @@ export default {
         },
         resetGame() {
             this.gameOver = false;
+            this.gameStarted = true;
             this.score = 0;
             this.barriers = [];
             this.lastFrameTime = performance.now();
+            this.startGeneratingBarriers(); // 确保障碍物生成函数在游戏开始时被调用
             this.predictWebcam();
         },
         checkCollision(barrier, submarineX, submarineY, submarineWidth, submarineHeight) {
             const rect1 = {
                 x: barrier.x,
                 y: barrier.y,
-                width: barrier.width*951/2162, // 障碍物图片可能缩放，使用比例计算
+                width: barrier.width * 951 / 2162, // 障碍物图片可能缩放，使用比例计算
                 height: barrier.height
             };
             const rect2 = {
-                x: barrier.x + barrier.width*1187/2162,
+                x: barrier.x + barrier.width * 1187 / 2162,
                 y: barrier.y,
-                width: barrier.width*(2162-1187)/2162,
+                width: barrier.width * (2162 - 1187) / 2162,
                 height: barrier.height
             };
             const submarine_rect = {
