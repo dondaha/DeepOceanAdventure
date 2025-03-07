@@ -147,14 +147,26 @@ export default {
             });
         },
         enableCam() {
-            const constraints = {
-                video: true
-            };
-            navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
-                this.$refs.video.srcObject = stream;
-                this.$refs.video.addEventListener("loadeddata", this.predictWebcam);
-            });
-        },
+        navigator.mediaDevices.enumerateDevices().then((devices) => {
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+            console.log('Available video devices:', videoDevices);
+
+            const selectedDevice = videoDevices.find(device => !device.label.toLowerCase().includes('hdmi'));
+            if (selectedDevice) {
+                const constraints = {
+                    video: { deviceId: selectedDevice.deviceId }
+                };
+                navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
+                    this.$refs.video.srcObject = stream;
+                    this.$refs.video.addEventListener("loadeddata", this.predictWebcam);
+                });
+            } else {
+                console.error('No suitable video device found.');
+            }
+        }).catch((error) => {
+            console.error('Error accessing media devices.', error);
+        });
+    },
         loadImage() {
             // 加载背景图片
             const img = new Image();
